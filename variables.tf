@@ -81,6 +81,7 @@ variable "auth_cognito_idp_client_secret" {
   type        = string
   description = "Client secret of the Cognito User Pool to use for authentication. Only appliable if `auth_enabled` is `true`."
   default     = null
+  sensitive   = true
 }
 
 variable "auth_cognito_idp_client_scopes" {
