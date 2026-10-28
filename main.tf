@@ -381,7 +381,7 @@ resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
 }
 
 resource "aws_iam_role_policy" "this" {
-  for_each = { for k, v in local.iam_role_policies : k => v if v != null }
+  for_each = module.yopass_label.enabled ? local.iam_role_policies : {}
 
   name   = each.key
   role   = resource.aws_iam_role.this[0].name
