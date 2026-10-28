@@ -13,8 +13,8 @@ variable "yopass_encrypted_secret_max_length" {
 
 variable "yopass_version" {
   type        = string
-  description = "Version of Yopass to deploy."
-  default     = "latest"
+  description = "Version (git tag or commit) of Yopass to deploy. Set to `latest` to build the upstream default branch."
+  default     = "16.0.1"
 }
 
 variable "server_waf_acl_name" {

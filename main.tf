@@ -52,9 +52,8 @@ module "yopass_website_assets" {
   docker_build_target    = "package"
 
   docker_build_args = {
-    YOPASS_VERSION      = var.yopass_version
-    YOPASS_FRONTEND_URL = "https://${var.website_domain_name}"
-    YOPASS_BACKEND_URL  = trim(local.yopass_server_apigw_url, "/")
+    YOPASS_VERSION     = var.yopass_version
+    YOPASS_BACKEND_URL = trim(local.yopass_server_apigw_url, "/")
   }
 
   context = module.yopass_label.context

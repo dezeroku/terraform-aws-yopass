@@ -55,7 +55,7 @@ for more details on these variables.
 | `website_domain_name`                | Domain name for Yopass website.                                                                               |                string                |   None   |   Yes    |
 | `website_waf_acl_name`               | Name of the WAF ACL to associate with the CloudFront distribution.                                            |                string                |    ""    |    No    |
 | `yopass_encrypted_secret_max_length` | Maximum length of encrypted secrets.                                                                          |                number                |  10000   |    No    |
-| `yopass_version`                     | Version of Yopass to deploy.                                                                                  |                string                | "latest" |    No    |
+| `yopass_version`                     | Version (git tag or commit) of Yopass to deploy. `latest` builds the upstream default branch.                 |                string                | "16.0.1" |    No    |
 
 ## Outputs
 
