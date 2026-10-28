@@ -233,8 +233,9 @@ resource "aws_lambda_function" "this" {
 
   environment {
     variables = {
-      TABLE_NAME = aws_dynamodb_table.this[0].name
-      MAX_LENGTH = var.yopass_encrypted_secret_max_length
+      TABLE_NAME           = aws_dynamodb_table.this[0].name
+      MAX_LENGTH           = var.yopass_encrypted_secret_max_length
+      CORS_ALLOWED_ORIGINS = "https://${var.website_domain_name}"
     }
   }
 
