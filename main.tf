@@ -6,6 +6,17 @@ locals {
 
   yopass_server_apigw_url = module.yopass_label.enabled ? aws_api_gateway_stage.this[0].invoke_url : ""
 
+  # api paths served by the yopass server; routed via cloudfront so they share
+  # the website origin (no cors) and its auth-at-edge protection
+  yopass_server_path_patterns = [
+    "/auth/*",
+    "/config",
+    "/create/*",
+    "/file/*",
+    "/request*",
+    "/secret/*",
+  ]
+
   iam_role_policies = {
     access = one(data.aws_iam_policy_document.this.*.json)
   }
@@ -53,7 +64,7 @@ module "yopass_website_assets" {
 
   docker_build_args = {
     YOPASS_VERSION     = var.yopass_version
-    YOPASS_BACKEND_URL = trim(local.yopass_server_apigw_url, "/")
+    YOPASS_BACKEND_URL = "https://${var.website_domain_name}"
   }
 
   context = module.yopass_label.context
@@ -79,7 +90,25 @@ module "yopass_website" {
     },
   ] : []
 
-  custom_origins = var.auth_enabled ? [{
+  custom_origins = concat([{
+    # yopass server api; the api key header is only known to cloudfront, so the
+    # api gateway cannot be called directly
+    domain_name = "${try(aws_api_gateway_rest_api.this[0].id, "")}.execute-api.${local.aws_region_name}.amazonaws.com"
+    origin_id   = "server"
+    origin_path = "/${try(aws_api_gateway_stage.this[0].stage_name, "")}"
+    custom_headers = [{
+      name  = "x-api-key"
+      value = try(aws_api_gateway_api_key.this[0].value, "")
+    }]
+    custom_origin_config = {
+      http_port                = 80
+      https_port               = 443
+      origin_protocol_policy   = "https-only"
+      origin_ssl_protocols     = ["TLSv1.2"]
+      origin_keepalive_timeout = 5
+      origin_read_timeout      = 30
+    }
+    }], var.auth_enabled ? [{
     # blackhole (never served) origin assigned to auth-at-edge behaviors/paths
     domain_name    = "blackhole.example.com"
     origin_id      = "blackhole"
@@ -93,9 +122,38 @@ module "yopass_website" {
       origin_keepalive_timeout = 60
       origin_read_timeout      = 60
     }
-  }] : []
+  }] : [])
 
-  ordered_cache = var.auth_enabled ? [
+  ordered_cache = concat([
+    for x in local.yopass_server_path_patterns : {
+      target_origin_id           = "server"
+      path_pattern               = x
+      allowed_methods            = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      compress                   = true
+      cache_policy_id            = try(data.aws_cloudfront_cache_policy.disabled[0].id)
+      origin_request_policy_id   = try(data.aws_cloudfront_origin_request_policy.all_viewer_except_host[0].id)
+      response_headers_policy_id = try(data.aws_cloudfront_response_headers_policy.security_headers[0].id)
+      viewer_protocol_policy     = "redirect-to-https"
+
+      lambda_function_association = var.auth_enabled ? [{
+        event_type   = "viewer-request"
+        lambda_arn   = module.cloudfront_middleware_at_edge.auth_services.check_auth.fn_arn
+        include_body = false
+      }] : []
+
+      // using cf policies so these are not used but are required to be defined
+      cached_methods                    = ["GET", "HEAD"]
+      default_ttl                       = null
+      forward_cookies                   = null
+      forward_cookies_whitelisted_names = null
+      forward_header_values             = null
+      forward_query_string              = null
+      function_association              = []
+      max_ttl                           = null
+      min_ttl                           = null
+      trusted_key_groups                = null
+      trusted_signers                   = null
+    }], var.auth_enabled ? [
     for x in module.cloudfront_middleware_at_edge.auth_routes : {
       target_origin_id            = "blackhole"
       path_pattern                = x.path_pattern
@@ -119,7 +177,7 @@ module "yopass_website" {
       min_ttl                           = null
       trusted_key_groups                = null
       trusted_signers                   = null
-  }] : []
+  }] : [])
 
   cloudfront_access_log_create_bucket = false
   cloudfront_access_logging_enabled   = false
@@ -167,6 +225,16 @@ data "aws_cloudfront_origin_request_policy" "cors_s3origin" {
 data "aws_cloudfront_response_headers_policy" "cors_preflight_hsts" {
   count = module.yopass_label.enabled ? 1 : 0
   name  = "Managed-CORS-with-preflight-and-SecurityHeadersPolicy"
+}
+
+data "aws_cloudfront_response_headers_policy" "security_headers" {
+  count = module.yopass_label.enabled ? 1 : 0
+  name  = "Managed-SecurityHeadersPolicy"
+}
+
+data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
+  count = module.yopass_label.enabled ? 1 : 0
+  name  = "Managed-AllViewerExceptHostHeader"
 }
 
 # ------------------------------------------------------------- website-auth ---
@@ -266,10 +334,11 @@ resource "aws_api_gateway_resource" "proxy" {
 resource "aws_api_gateway_method" "proxy" {
   count = module.yopass_label.enabled ? 1 : 0
 
-  rest_api_id   = aws_api_gateway_rest_api.this[0].id
-  resource_id   = aws_api_gateway_resource.proxy[0].id
-  http_method   = "ANY"
-  authorization = "NONE"
+  rest_api_id      = aws_api_gateway_rest_api.this[0].id
+  resource_id      = aws_api_gateway_resource.proxy[0].id
+  http_method      = "ANY"
+  authorization    = "NONE"
+  api_key_required = true
 }
 
 resource "aws_api_gateway_integration" "lambda" {
@@ -288,6 +357,18 @@ resource "aws_api_gateway_deployment" "this" {
   count = module.yopass_label.enabled ? 1 : 0
 
   rest_api_id = aws_api_gateway_rest_api.this[0].id
+
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.proxy[0],
+      aws_api_gateway_method.proxy[0],
+      aws_api_gateway_integration.lambda[0],
+    ]))
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 
   depends_on = [
     aws_api_gateway_integration.lambda
@@ -317,6 +398,41 @@ resource "aws_api_gateway_method_settings" "this" {
     throttling_rate_limit  = var.server_throttling_rate_limit
     throttling_burst_limit = var.server_throttling_burst_limit
   }
+}
+
+resource "random_password" "apigw_api_key" {
+  count = module.yopass_label.enabled ? 1 : 0
+
+  length  = 40
+  special = false
+}
+
+resource "aws_api_gateway_api_key" "this" {
+  count = module.yopass_label.enabled ? 1 : 0
+
+  name  = module.yopass_label.id
+  value = random_password.apigw_api_key[0].result
+  tags  = module.yopass_label.tags
+}
+
+resource "aws_api_gateway_usage_plan" "this" {
+  count = module.yopass_label.enabled ? 1 : 0
+
+  name = module.yopass_label.id
+  tags = module.yopass_label.tags
+
+  api_stages {
+    api_id = aws_api_gateway_rest_api.this[0].id
+    stage  = aws_api_gateway_stage.this[0].stage_name
+  }
+}
+
+resource "aws_api_gateway_usage_plan_key" "this" {
+  count = module.yopass_label.enabled ? 1 : 0
+
+  key_id        = aws_api_gateway_api_key.this[0].id
+  key_type      = "API_KEY"
+  usage_plan_id = aws_api_gateway_usage_plan.this[0].id
 }
 
 resource "aws_lambda_permission" "apigw" {

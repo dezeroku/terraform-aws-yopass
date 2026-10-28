@@ -17,8 +17,16 @@ cost-effective solution. The design adheres to a pay-per-use model.
   distribution for a fast and secure user experience globally.
 - **Automated Deployment**: The entire Yopass deployment, including the server,
   website, and database, is handled by Terraform, providing an easy and repeatable deployment process.
+- **Single Origin**: The Yopass server API is served through the same
+  CloudFront distribution as the website. The API Gateway requires an API key
+  that only CloudFront sends, so it cannot be called directly.
 - **User Authentication Layer**: An optional user authentication layer is
-  available, securing access to the Yopass website using AWS Cognito.
+  available, securing access to both the Yopass website and its API using AWS
+  Cognito.
+
+DNS records for `website_domain_name` are not managed by this module; point an
+alias record at the `website_cloudfront_domain_name` and
+`website_cloudfront_hosted_zone_id` outputs.
 
 ## Usage
 
