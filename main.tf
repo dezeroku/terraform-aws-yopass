@@ -406,11 +406,8 @@ data "aws_iam_policy_document" "this" {
   statement {
     effect = "Allow"
     actions = [
-      "dynamodb:Scan",
-      "dynamodb:Query",
       "dynamodb:GetItem",
       "dynamodb:PutItem",
-      "dynamodb:UpdateItem",
       "dynamodb:DeleteItem",
     ]
     resources = [
