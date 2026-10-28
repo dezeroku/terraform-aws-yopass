@@ -50,6 +50,8 @@ for more details on these variables.
 | `auth_enabled`                       | Whether to enable authentication power by Cognito User Pool.                                                  |                 bool                 |  false   |    No    |
 | `aws_account_id`                     | The AWS account ID that the module will be deployed.                                                          |                string                |    ""    |    No    |
 | `aws_region_name`                    | The AWS region name where the module will be deployed.                                                        |                string                |    ""    |    No    |
+| `server_throttling_burst_limit`      | Burst requests allowed on the Yopass server API Gateway stage.                                                |                number                |    20    |    No    |
+| `server_throttling_rate_limit`       | Steady-state requests per second allowed on the Yopass server API Gateway stage.                              |                number                |    10    |    No    |
 | `server_waf_acl_name`                | Name of the WAF ACL to associate with the API Gateway.                                                        |                string                |    ""    |    No    |
 | `website_certificate_arn`            | ARN of the ACM certificate for the domain name.                                                               |                string                |   None   |   Yes    |
 | `website_domain_name`                | Domain name for Yopass website.                                                                               |                string                |   None   |   Yes    |

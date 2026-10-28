@@ -23,6 +23,18 @@ variable "server_waf_acl_name" {
   default     = ""
 }
 
+variable "server_throttling_rate_limit" {
+  type        = number
+  description = "Steady-state requests per second allowed on the Yopass server API Gateway stage."
+  default     = 10
+}
+
+variable "server_throttling_burst_limit" {
+  type        = number
+  description = "Burst requests allowed on the Yopass server API Gateway stage."
+  default     = 20
+}
+
 variable "website_domain_name" {
   type        = string
   description = "Domain name for Yopass website."
